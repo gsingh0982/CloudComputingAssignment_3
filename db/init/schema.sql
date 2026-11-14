@@ -5,3 +5,10 @@ CREATE TABLE products(
     quantity INTEGER NOT NULL DEFAULT 0,
     image_url VARCHAR(255)
 );
+
+CREATE TABLE IF NOT EXISTS inventory (
+        id BIGSERIAL PRIMARY KEY,
+        product_id BIGINT NOT NULL UNIQUE,
+        available INTEGER NOT NULL DEFAULT 0,
+        CHECK (available >= 0)
+);
