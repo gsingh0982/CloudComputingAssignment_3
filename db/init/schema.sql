@@ -12,3 +12,19 @@ CREATE TABLE IF NOT EXISTS inventory (
         available INTEGER NOT NULL DEFAULT 0,
         CHECK (available >= 0)
 );
+CREATE TABLE carts (
+    id BIGSERIAL PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    CHECK (status IN ('OPEN', 'CHECKED_OUT'))
+);
+
+CREATE TABLE cart_items (
+    id BIGSERIAL PRIMARY KEY,
+    cart_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    quantity INTEGER NOT NULL,
+
+    FOREIGN KEY (cart_id) REFERENCES carts(id),
+    CHECK (product_id > 0),
+    CHECK (quantity > 0)
+);
