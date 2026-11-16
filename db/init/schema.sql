@@ -28,3 +28,11 @@ CREATE TABLE cart_items (
     CHECK (product_id > 0),
     CHECK (quantity > 0)
 );
+
+CREATE TABLE IF NOT EXISTS orders (
+    id BIGSERIAL PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    quantity INTEGER NOT NULL,
+    total_price DOUBLE PRECISION NOT NULL,
+    status VARCHAR(20) NOT NULL
+);
