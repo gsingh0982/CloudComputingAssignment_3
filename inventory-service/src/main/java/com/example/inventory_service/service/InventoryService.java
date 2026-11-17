@@ -23,19 +23,19 @@ public class InventoryService {
         this.inventoryRepository = inventoryRepository;
     }
 
-    // Get all inventory
+    //Get all inventory
     public List<Inventory> getAllInventory() {
         return inventoryRepository.findAll();
     }
 
-    // Get inventory by product ID
+    //Get inventory by product ID
     public Inventory getInventoryByProductId(Long productId) {
         return inventoryRepository.findByProductId(productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Inventory not found"));
     }
 
-    // Reserve stock
+    //Reserve stock
     @Transactional
     public void reserveStock(List<InventoryReservationRequest> requests) {
 
@@ -46,10 +46,11 @@ public class InventoryService {
 
         Map<Long, Integer> requestedItems = new TreeMap<>();
 
-        // Validate and combine duplicate products
+        //Validate and combine duplicate products
         for (InventoryReservationRequest request : requests) {
 
-            if (request.getProductId() == null ||
+            if (request == null ||
+                    request.getProductId() == null ||
                     request.getQuantity() == null ||
                     request.getQuantity() <= 0) {
 
@@ -66,7 +67,7 @@ public class InventoryService {
 
         List<Inventory> inventories = new ArrayList<>();
 
-        // Check stock for every product first
+        //Check stock for every product first
         for (Map.Entry<Long, Integer> item : requestedItems.entrySet()) {
 
             Inventory inventory = inventoryRepository
@@ -74,7 +75,8 @@ public class InventoryService {
                     .orElseThrow(() -> new ResponseStatusException(
                             HttpStatus.NOT_FOUND, "Inventory not found"));
 
-            if (inventory.getAvailable() < item.getValue()) {
+            if (inventory.getAvailable() == null ||
+                    inventory.getAvailable() < item.getValue()) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "Insufficient stock for product: " + item.getKey());
@@ -83,7 +85,7 @@ public class InventoryService {
             inventories.add(inventory);
         }
 
-        // Reduce stock only after all products pass validation
+        //Reduce stock only after all products pass validation
         for (Inventory inventory : inventories) {
 
             Integer quantity = requestedItems.get(inventory.getProductId());
