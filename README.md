@@ -1,117 +1,65 @@
 # Cloud-native e-commerce store
 
-PROG3350 Assignment Three. Four Spring Boot services share a PostgreSQL database, with each service owning its own tables. The planned React storefront calls the APIs directly.
+PROG3350 Assignment Three. Four Spring Boot services share a PostgreSQL database, with each service owning its own tables. The React storefront displays the catalog, stock, and cart.
 
-## Current status
+## Start PostgreSQL
 
-The repository contains all four backend services, database initialization scripts, and Dockerfiles for order-service and cart-service. Product-service and inventory-service Dockerfiles, the React frontend, and image assets are still missing. The run scripts skip components without Dockerfiles, so they currently provide a partial setup. Full checkout requires product-service and inventory-service.
-
-The scripts use a shared Docker network and individual `docker run` commands, following the team's Week 10 startup approach. This repository does not contain a Compose file.
-
-## Ownership
-
-| Component | Owner |
-| --- | --- |
-| product-service | gsingh0982 |
-| inventory-service | DavidJay109 |
-| cart-service | mamir203626 |
-| order-service | Favour Adesiyan |
-| frontend | Unassigned |
-| Database schema and seed data | Shared |
-
-## Run
-
-Start Docker Desktop, then run from the project root. Available Dockerfiles build from source inside Docker; local Java, Maven, Node, and PostgreSQL installations are not required.
-
-Windows PowerShell:
-
-```powershell
-.\run.ps1
-```
-
-macOS or Linux:
-
-```bash
-bash run.sh
-```
-
-Each run removes the existing store containers and their anonymous volumes, including database data. PostgreSQL then initializes a fresh database from `db/init`. The scripts wait ten seconds after starting PostgreSQL; this is a fixed delay, not a readiness check. Check container status and logs before sending requests.
-
-The frontend URL will be http://localhost:3000 once the frontend is implemented and running.
-
-## Ports
-
-| Container | Host port | Container port |
-| --- | --- | --- |
-| frontend (pending) | 3000 | 3000 |
-| product-service (Dockerfile pending) | 8080 | 8080 |
-| order-service | 8081 | 8081 |
-| inventory-service (Dockerfile pending) | 8082 | 8082 |
-| cart-service | 8083 | 8083 |
-| shop-postgres | 5433 | 5432 |
-
-Containers use names on `store-net` to reach each other. Order-service calls `product-service:8080` and `inventory-service:8082`; cart-service calls `order-service:8081`. All backend services connect to `shop-postgres:5432`. The scripts supply these addresses through environment variables.
-
-Browser requests use the published localhost ports, not Docker container names.
-
-## Database and reset
-
-PostgreSQL 16 reads `db/init/schema.sql` and `db/init/seed.sql` through `/docker-entrypoint-initdb.d` when it initializes an empty data volume. The seed defines 12 products with image paths and matching inventory rows, including one zero-stock product. Image files are not included yet.
-
-Each service uses `spring.jpa.hibernate.ddl-auto=validate`; SQL scripts define the schema.
-
-To remove containers, database data, and the network:
-
-```powershell
-.\stop.ps1
-```
-
-```bash
-bash stop.sh
-```
-
-Run the startup script again to recreate and seed the database. Both startup and stop scripts delete existing database data.
-
-## Verification
-
-Inspect containers and order-service logs:
-
-```bash
-docker ps -a
-docker logs order-service
-docker exec shop-postgres psql -U postgres -d shopdb -c "SELECT * FROM orders;"
-```
-
-Check the order endpoint after it starts:
-
-```bash
-curl http://localhost:8081/api/orders
-```
-
-In Windows PowerShell, use `curl.exe` for these curl commands.
-
-After adding and starting the missing services:
-
-```bash
-curl http://localhost:8080/api/products
-curl http://localhost:8082/api/inventory
-```
-
-Once the frontend is available, verify the full flow:
-
-1. Add two products to a cart and check out.
-2. Confirm that each cart line creates an order and reduces inventory.
-3. Request more stock than is available. Confirm a clear error, no new orders, and no inventory deduction.
-
-## Checkout
+Start Docker Desktop. From the project root, run `.\run.ps1` in Windows PowerShell or `bash run.sh` on macOS or Linux. This starts `postgres:16` on `localhost:5433` and mounts `db/init` into the container. On a fresh volume, PostgreSQL creates the tables and seeds 12 products and their inventory.
 
 ```text
-frontend -> cart-service     POST /api/carts/{id}/checkout
-cart     -> order-service    POST /api/orders
-order    -> product-service  GET /api/products/{id}
-order    -> inventory-service POST /api/inventory/reserve
+docker logs -f shop-postgres
 ```
 
-Order-service fetches current prices, reserves inventory, and saves one confirmed order per cart line. Inventory reserves all requested lines or returns 409 without deductions. Cart-service marks the cart checked out after receiving the orders.
+On the first run, wait for initialization to finish and PostgreSQL to report that it is ready to accept connections. Press Ctrl+C to leave the log view.
 
-The services communicate through Spring RestClient and access only their own tables. Checkout is not a distributed transaction: a failure to save orders does not undo a completed inventory reservation.
+## Run the services in IntelliJ
+
+Open the project in IntelliJ IDEA with JDK 21. Import each service's `pom.xml` as a Maven project if IntelliJ hasn't already linked it. Run the main classes below in order using the Run button beside each class. Wait for each app to finish starting before launching the next.
+
+| Maven folder | Main class | Host port | Owner |
+| --- | --- | --- | --- |
+| `productService` | `ProductServiceApplication` | 8080 | gsingh0982 |
+| `inventory-service` | `InventoryServiceApplication` | 8082 | DavidJay109 |
+| `order-service` | `OrderServiceApplication` | 8081 | Favour Adesiyan |
+| `cart-service` | `CartServiceApplication` | 8083 | mamir203626 |
+| `frontend` | React storefront | 3000 | To confirm |
+| PostgreSQL | `shop-postgres` container | 5433 | Shared |
+
+The Java apps connect to `jdbc:postgresql://localhost:5433/shopdb` and use their existing localhost defaults for service calls.
+
+## Run the storefront
+
+From the project root, use Node.js 20.19+ (or Node.js 22.12+):
+
+```text
+cd frontend
+npm ci
+npm run dev
+```
+
+Open http://localhost:3000. Add a product to the cart, check the subtotal, and check out. To demonstrate the out-of-stock response, add more units of an in-stock product than the catalog shows, then try checkout.
+
+The storefront reads names and prices from product-service and current stock from inventory-service. It sends cart actions and checkout to cart-service. Product images live in `frontend/public/images/` and their paths come from the product API.
+
+## Product API
+
+Product-service retains the Assignment Two write and search routes. Create with `POST /api/products`, update with `PUT /api/products/{id}`, and remove with `DELETE /api/products/{id}`. Search by name with `GET /api/products/search?name=keyboard` or by price with `GET /api/products/search/price?min=20&max=100`.
+
+Product writes accept `name`, `price`, `quantity`, and an optional `imageUrl`. Inventory-service owns the live stock counts.
+
+## Verify checkout through the API
+
+Use a browser or an HTTP client to check the seeded products at `GET http://localhost:8080/api/products`, stock at `GET http://localhost:8082/api/inventory`, and orders at `GET http://localhost:8081/api/orders`.
+
+1. Create a cart with `POST http://localhost:8083/api/carts`.
+2. Add a line using `POST /api/carts/{id}/items` with JSON `{"productId":1,"quantity":1}`.
+3. Call `POST /api/carts/{id}/checkout`. Check that it returns 201, creates an order, and reduces product 1's stock by one.
+4. Create a new cart and repeat with product 3, which has zero stock in the seed. Check that checkout returns 409 and leaves orders and inventory unchanged.
+
+Order-service looks up the current prices, reserves inventory, and saves one confirmed order per cart line. Cart-service marks the cart checked out after receiving those orders.
+
+## Stop or reset
+
+Stop the Java apps from IntelliJ. Run `docker stop shop-postgres` to stop PostgreSQL and keep its data. Resume it with `docker start shop-postgres`.
+
+To reset the database, run `.\stop.ps1` on Windows or `bash stop.sh` on macOS or Linux. This deletes the database container and its volume. Run the startup script again to recreate the seeded database.

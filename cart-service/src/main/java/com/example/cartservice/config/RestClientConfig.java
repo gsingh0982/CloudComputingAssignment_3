@@ -10,9 +10,8 @@ public class RestClientConfig {
 
     @Bean
     public RestClient orderRestClient(
-            RestClient.Builder builder,
             @Value("${order.service.url}") String url) {
 
-        return builder.baseUrl(url).build();
+        return RestClient.builder().baseUrl(url).build();
     }
 }

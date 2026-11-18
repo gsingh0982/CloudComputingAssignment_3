@@ -1,7 +1,7 @@
-# Removes store containers, their anonymous volumes, and the store network.
-# Database data is deleted; the next run initializes it from db/init.
+$ErrorActionPreference = 'Stop'
 
-docker rm -f -v frontend cart-service order-service inventory-service product-service shop-postgres 2>$null
-docker network rm store-net 2>$null
-
-Write-Host "Stopped and removed. The next .\run.ps1 will re-seed the database."
+# Removing the volume resets the database on the next run.
+docker rm -f -v shop-postgres
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not remove shop-postgres.'
+}
