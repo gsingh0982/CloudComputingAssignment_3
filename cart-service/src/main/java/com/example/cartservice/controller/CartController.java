@@ -14,7 +14,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/carts")
-// Allow requests from the React frontend
 @CrossOrigin(origins = "http://localhost:3000")
 public class CartController {
 
@@ -24,7 +23,6 @@ public class CartController {
         this.cartService = cartService;
     }
 
-    // Create an empty cart and return 201 Created
     @PostMapping
     public ResponseEntity<CartResponse> createCart() {
 
@@ -32,14 +30,12 @@ public class CartController {
                 .body(cartService.createCart());
     }
 
-    // Get a cart and its items using the cart ID
     @GetMapping("/{id}")
     public CartResponse getCart(@PathVariable Long id) {
 
         return cartService.getCart(id);
     }
 
-    // Add a product to the specified cart
     @PostMapping("/{id}/items")
     public ResponseEntity<CartResponse> addItem(
             @PathVariable Long id,
@@ -49,8 +45,6 @@ public class CartController {
                 .body(cartService.addItem(id, request));
     }
 
-    // Remove an item from the specified cart
-    // Return 204 No Content when the item is removed
     @DeleteMapping("/{id}/items/{itemId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void removeItem(
@@ -60,7 +54,6 @@ public class CartController {
         cartService.removeItem(id, itemId);
     }
 
-    // Send the cart for checkout and return the created orders
     @PostMapping("/{id}/checkout")
     public ResponseEntity<List<OrderResponse>> checkout(
             @PathVariable Long id) {

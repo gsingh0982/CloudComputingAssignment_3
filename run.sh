@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# PROG3350 Assignment Three - start the whole store
-# Follows the Week 10 "Running the Docker Demo" format: one shared network,
-# then each container started by hand. No Docker Compose.
-#
-# Usage:  ./run.sh           (from the project root, with Docker running)
+# Starts services with available Dockerfiles. Run from the project root.
+# Removes existing store containers and their anonymous volumes, including database data.
 
 set -e
 
-# Builds an image only if that service has a Dockerfile yet, so the script
-# still brings up the finished services while the rest are being written.
+# Missing Dockerfiles allow a partial development setup.
 build_service() {
   local image="$1" folder="$2"
   if [ -f "$folder/Dockerfile" ]; then
@@ -19,17 +15,14 @@ build_service() {
   return 1
 }
 
-# ---- Step 0: clean slate (safe to run every time) ----
 echo
 echo "[0/6] Removing anything left over..."
 docker rm -f -v frontend cart-service order-service inventory-service product-service shop-postgres 2>/dev/null || true
 docker network rm store-net 2>/dev/null || true
 
-# ---- Step 1: the shared network ----
 echo "[1/6] Creating network store-net..."
 docker network create store-net >/dev/null
 
-# ---- Step 2: PostgreSQL, seeded from db/init on first start ----
 echo "[2/6] Starting PostgreSQL..."
 docker run --name shop-postgres \
   --network store-net \
@@ -44,7 +37,6 @@ echo "      waiting for the database to accept connections..."
 sleep 10
 docker logs shop-postgres --tail 3
 
-# ---- Step 3: build the images from each Dockerfile ----
 echo
 echo "[3/6] Building images (first run takes a few minutes)..."
 has_product=0;   build_service store-product-service   ./productService    && has_product=1
@@ -53,7 +45,6 @@ has_order=0;     build_service store-order-service     ./order-service     && ha
 has_cart=0;      build_service store-cart-service      ./cart-service      && has_cart=1
 has_frontend=0;  build_service store-frontend          ./frontend          && has_frontend=1
 
-# ---- Step 4: the two services that call nobody ----
 echo
 echo "[4/6] Starting product-service and inventory-service..."
 if [ "$has_product" = 1 ]; then
@@ -72,8 +63,6 @@ if [ "$has_inventory" = 1 ]; then
     -p 8082:8082 --restart on-failure -d store-inventory-service >/dev/null
 fi
 
-# ---- Step 5: order-service, then cart-service ----
-# Containers reach each other by container name on store-net, not localhost.
 echo "[5/6] Starting order-service and cart-service..."
 if [ "$has_order" = 1 ]; then
   docker run --name order-service --network store-net \
@@ -94,7 +83,6 @@ if [ "$has_cart" = 1 ]; then
     -p 8083:8083 --restart on-failure -d store-cart-service >/dev/null
 fi
 
-# ---- Step 6: the storefront ----
 echo "[6/6] Starting the frontend..."
 if [ "$has_frontend" = 1 ]; then
   docker run --name frontend --network store-net \

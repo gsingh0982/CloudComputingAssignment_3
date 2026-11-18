@@ -41,7 +41,6 @@ public class CartService {
         this.orderRestClient = orderRestClient;
     }
 
-    // 1. Create a new cart
     @Transactional
     public CartResponse createCart() {
 
@@ -53,7 +52,6 @@ public class CartService {
         return getCart(cart.getId());
     }
 
-    // 2. View a cart and its items
     public CartResponse getCart(Long cartId) {
 
         Cart cart = findCart(cartId);
@@ -67,7 +65,6 @@ public class CartService {
         );
     }
 
-    // 3. Add an item to a cart
     @Transactional
     public CartResponse addItem(
             Long cartId,
@@ -76,7 +73,6 @@ public class CartService {
         Cart cart = findCart(cartId);
         requireOpen(cart);
 
-        // Check product ID and quantity
         if (request == null ||
                 request.getProductId() == null ||
                 request.getProductId() <= 0 ||
@@ -100,7 +96,6 @@ public class CartService {
         return getCart(cartId);
     }
 
-    // 4. Remove an item from a cart
     @Transactional
     public void removeItem(Long cartId, Long itemId) {
 
@@ -113,7 +108,7 @@ public class CartService {
                         "Item not found"
                 ));
 
-        // Make sure the item belongs to this cart
+        // Reject item IDs belonging to another cart.
         if (!item.getCartId().equals(cartId)) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
@@ -124,7 +119,6 @@ public class CartService {
         itemRepository.delete(item);
     }
 
-    // 5. Checkout the cart
     public List<OrderResponse> checkout(Long cartId) {
 
         Cart cart = findCart(cartId);
@@ -139,7 +133,6 @@ public class CartService {
             );
         }
 
-        // Prepare items to send to Order Service
         List<OrderItem> orderItems = new ArrayList<>();
 
         for (CartItem item : items) {
@@ -153,7 +146,6 @@ public class CartService {
 
         try {
 
-            // Send the items to Order Service
             orders = orderRestClient.post()
                     .uri("/api/orders")
                     .body(orderItems)
@@ -163,7 +155,7 @@ public class CartService {
 
         } catch (RestClientResponseException ex) {
 
-            // Return 409 for insufficient stock or 400 for invalid orders
+            // Preserve checkout validation and stock errors from order-service.
             if (ex.getStatusCode().value() == 409 ||
                     ex.getStatusCode().value() == 400) {
 
@@ -189,7 +181,7 @@ public class CartService {
             );
         }
 
-        // Check that Order Service returned the expected orders
+        // Expect one order per cart line before marking the cart checked out.
         if (orders == null || orders.size() != items.size()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
@@ -197,14 +189,13 @@ public class CartService {
             );
         }
 
-        // Update cart status only after successful checkout
+        // Mark the cart checked out only after order-service succeeds.
         cart.setStatus(Cart.Status.CHECKED_OUT);
         cartRepository.save(cart);
 
         return orders;
     }
 
-    // Find a cart or return 404
     private Cart findCart(Long cartId) {
 
         return cartRepository.findById(cartId)
@@ -214,7 +205,6 @@ public class CartService {
                 ));
     }
 
-    // Make sure the cart is still open
     private void requireOpen(Cart cart) {
 
         if (cart.getStatus() != Cart.Status.OPEN) {

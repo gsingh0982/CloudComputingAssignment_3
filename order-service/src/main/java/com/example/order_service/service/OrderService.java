@@ -15,24 +15,13 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The checkout orchestrator.
- *
- * This is the only service that calls two others. For each line it asks
- * product-service for the current price, then asks inventory-service to
- * reserve the whole basket at once, and only saves orders if that succeeded.
- *
- * It never touches the products or inventory tables. If it needs a price it
- * asks the service that owns it.
- */
+/** Coordinates product lookup, inventory reservation, and order persistence. */
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final RestClient restClient;
 
-    // Addresses come from application.properties, overridden by environment
-    // variables in docker-compose. Never hard-coded.
     private final String productServiceUrl;
     private final String inventoryServiceUrl;
 
@@ -51,16 +40,13 @@ public class OrderService {
     }
 
     /**
-     * Steps 3 to 5 of the checkout flow.
-     *
-     * Stock is reserved BEFORE anything is saved, so a basket that is short
-     * fails with 409 and leaves the orders table untouched.
+     * Reserves inventory before persisting orders; insufficient stock returns 409.
+     * A persistence failure does not roll back the remote inventory reservation.
      */
     public List<Order> createOrders(List<OrderLineRequest> lines) {
 
         validate(lines);
 
-        // Step 3 - ask product-service to confirm each product and give its price.
         List<Order> toSave = new ArrayList<>();
 
         for (OrderLineRequest line : lines) {
@@ -75,15 +61,11 @@ public class OrderService {
                     "CONFIRMED"));
         }
 
-        // Step 4 - reserve the whole basket. Throws 409 if any line is short,
-        // and inventory-service reserves nothing in that case.
         reserveStock(lines);
 
-        // Step 5 - stock is held, so the orders can be saved.
         return orderRepository.saveAll(toSave);
     }
 
-    /** A malformed basket is the client's mistake, so 400. */
     private void validate(List<OrderLineRequest> lines) {
         if (lines == null || lines.isEmpty()) {
             throw new ResponseStatusException(
@@ -100,7 +82,6 @@ public class OrderService {
         }
     }
 
-    /** GET {product-service}/api/products/{id} */
     private ProductResponse fetchProduct(Long productId) {
         try {
             return restClient.get()
@@ -109,13 +90,12 @@ public class OrderService {
                     .body(ProductResponse.class);
 
         } catch (HttpClientErrorException.NotFound e) {
-            // The product does not exist, so the basket itself is wrong: 400.
+            // A missing product makes the checkout request invalid.
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "No product with id: " + productId);
         }
     }
 
-    /** POST {inventory-service}/api/inventory/reserve */
     private void reserveStock(List<OrderLineRequest> lines) {
         try {
             restClient.post()
@@ -126,13 +106,11 @@ public class OrderService {
                     .toBodilessEntity();
 
         } catch (HttpClientErrorException.Conflict e) {
-            // Not enough stock. Nothing was reserved and nothing is saved.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Not enough stock for one or more items");
 
         } catch (HttpClientErrorException e) {
-            // Any other refusal from inventory-service (for example a product
-            // with no inventory row) is still a bad basket.
+            // Treat other inventory 4xx responses as invalid checkout requests.
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Inventory rejected the order: " + e.getStatusText());
         }

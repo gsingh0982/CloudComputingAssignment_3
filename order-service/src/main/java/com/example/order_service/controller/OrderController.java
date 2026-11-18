@@ -14,10 +14,6 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 
 import java.util.List;
 
-/**
- * HTTP layer. Turns requests into service calls and results into status codes.
- * No business logic lives here.
- */
 @RestController
 @RequestMapping("/api/orders")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -29,16 +25,11 @@ public class OrderController {
         this.orderService = orderService;
     }
 
-    /** GET /api/orders -> 200 + every order */
     @GetMapping
     public ResponseEntity<List<Order>> getAllOrders() {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
 
-    /**
-     * POST /api/orders -> 201 + the orders created.
-     * 400 if the basket is malformed, 409 if stock is short.
-     */
     @PostMapping
     public ResponseEntity<List<Order>> createOrders(@RequestBody List<OrderLineRequest> lines) {
         List<Order> created = orderService.createOrders(lines);

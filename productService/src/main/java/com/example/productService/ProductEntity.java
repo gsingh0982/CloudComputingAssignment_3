@@ -14,7 +14,7 @@ public class ProductEntity {
 
     private Double price;
 
-    // comes from the inventory service
+    // Legacy catalog quantity; inventory-service owns current stock levels.
     private Integer quantity;
 
     private String imageUrl;

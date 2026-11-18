@@ -1,13 +1,9 @@
-# PROG3350 Assignment Three - start the whole store
-# Follows the Week 10 "Running the Docker Demo" format: one shared network,
-# then each container started by hand. No Docker Compose.
-#
-# Usage:  .\run.ps1          (from the project root, with Docker Desktop running)
+# Starts services with available Dockerfiles. Run from the project root.
+# Removes existing store containers and their anonymous volumes, including database data.
 
 $ErrorActionPreference = "Stop"
 
-# Builds an image only if that service has a Dockerfile yet, so the script
-# still brings up the finished services while the rest are being written.
+# Missing Dockerfiles allow a partial development setup.
 function Build-Service($image, $folder) {
     if (Test-Path (Join-Path $folder "Dockerfile")) {
         docker build -t $image $folder
@@ -17,16 +13,13 @@ function Build-Service($image, $folder) {
     return $false
 }
 
-# ---- Step 0: clean slate (safe to run every time) ----
 Write-Host "`n[0/6] Removing anything left over..." -ForegroundColor Cyan
 docker rm -f -v frontend cart-service order-service inventory-service product-service shop-postgres 2>$null
 docker network rm store-net 2>$null
 
-# ---- Step 1: the shared network ----
 Write-Host "[1/6] Creating network store-net..." -ForegroundColor Cyan
 docker network create store-net | Out-Null
 
-# ---- Step 2: PostgreSQL, seeded from db/init on first start ----
 Write-Host "[2/6] Starting PostgreSQL..." -ForegroundColor Cyan
 docker run --name shop-postgres `
   --network store-net `
@@ -41,7 +34,6 @@ Write-Host "      waiting for the database to accept connections..."
 Start-Sleep -Seconds 10
 docker logs shop-postgres --tail 3
 
-# ---- Step 3: build the images from each Dockerfile ----
 Write-Host "`n[3/6] Building images (first run takes a few minutes)..." -ForegroundColor Cyan
 $hasProduct   = Build-Service store-product-service   ./productService
 $hasInventory = Build-Service store-inventory-service ./inventory-service
@@ -49,7 +41,6 @@ $hasOrder     = Build-Service store-order-service     ./order-service
 $hasCart      = Build-Service store-cart-service      ./cart-service
 $hasFrontend  = Build-Service store-frontend          ./frontend
 
-# ---- Step 4: the two services that call nobody ----
 Write-Host "`n[4/6] Starting product-service and inventory-service..." -ForegroundColor Cyan
 if ($hasProduct) {
   docker run --name product-service --network store-net `
@@ -67,8 +58,6 @@ if ($hasInventory) {
     -p 8082:8082 --restart on-failure -d store-inventory-service | Out-Null
 }
 
-# ---- Step 5: order-service, then cart-service ----
-# Containers reach each other by container name on store-net, not localhost.
 Write-Host "[5/6] Starting order-service and cart-service..." -ForegroundColor Cyan
 if ($hasOrder) {
   docker run --name order-service --network store-net `
@@ -89,7 +78,6 @@ if ($hasCart) {
     -p 8083:8083 --restart on-failure -d store-cart-service | Out-Null
 }
 
-# ---- Step 6: the storefront ----
 Write-Host "[6/6] Starting the frontend..." -ForegroundColor Cyan
 if ($hasFrontend) {
   docker run --name frontend --network store-net `

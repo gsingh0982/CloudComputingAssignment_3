@@ -1,12 +1,6 @@
 package com.example.order_service.dto;
 
-/**
- * What product-service sends back from GET /api/products/{id}.
- *
- * This service never reads the products table. It asks product-service and
- * Jackson turns the JSON into this object. Only price is actually used, but
- * the other fields are listed so the mapping is obvious.
- */
+/** Response from product-service GET /api/products/{id}. */
 public class ProductResponse {
 
     private Long id;

@@ -1,18 +1,14 @@
-# Cloud-Native E-Commerce Store
+# Cloud-native e-commerce store
 
-PROG3350 - Cloud Computing & Application Development
-Assignment Three
+PROG3350 Assignment Three. Four Spring Boot services share a PostgreSQL database, with each service owning its own tables. The planned React storefront calls the APIs directly.
 
-A React storefront backed by four Spring Boot microservices and one PostgreSQL
-database, all in Docker containers.
+## Current status
 
-> Docker Compose is **not** used. Per the Week 10 lecture and the instructor's
-> announcement, the system is started the way it was demonstrated in class:
-> one shared Docker network, then each container started with `docker run`.
+The repository contains all four backend services, database initialization scripts, and Dockerfiles for order-service and cart-service. Product-service and inventory-service Dockerfiles, the React frontend, and image assets are still missing. The run scripts skip components without Dockerfiles, so they currently provide a partial setup. Full checkout requires product-service and inventory-service.
 
----
+The scripts use a shared Docker network and individual `docker run` commands, following the team's Week 10 startup approach. This repository does not contain a Compose file.
 
-## Who built what
+## Ownership
 
 | Component | Owner |
 | --- | --- |
@@ -20,149 +16,102 @@ database, all in Docker containers.
 | inventory-service | DavidJay109 |
 | cart-service | mamir203626 |
 | order-service | Favour Adesiyan |
-| frontend | TBC |
-| database schema + seed | shared |
+| frontend | Unassigned |
+| Database schema and seed data | Shared |
 
----
+## Run
 
-## Requirements
+Start Docker Desktop, then run from the project root. Available Dockerfiles build from source inside Docker; local Java, Maven, Node, and PostgreSQL installations are not required.
 
-Docker Desktop, running. Nothing else - no JDK, Maven, Node or PostgreSQL.
-Each service is built from source inside Docker by its own multi-stage
-Dockerfile.
-
----
-
-## Running it
-
-From the project root:
-
-**Windows (PowerShell)**
+Windows PowerShell:
 
 ```powershell
 .\run.ps1
 ```
 
-**macOS / Linux**
+macOS or Linux:
 
 ```bash
-./run.sh
+bash run.sh
 ```
 
-Then open <http://localhost:3000>
+Each run removes the existing store containers and their anonymous volumes, including database data. PostgreSQL then initializes a fresh database from `db/init`. The scripts wait ten seconds after starting PostgreSQL; this is a fixed delay, not a readiness check. Check container status and logs before sending requests.
 
-The first run takes a few minutes while Maven downloads dependencies inside
-the build containers. Later runs are much faster.
-
-### Stopping
-
-```powershell
-.\stop.ps1      # Windows
-./stop.sh       # macOS / Linux
-```
-
----
+The frontend URL will be http://localhost:3000 once the frontend is implemented and running.
 
 ## Ports
 
-| Container | Host port | Port inside the container |
+| Container | Host port | Container port |
 | --- | --- | --- |
-| frontend | 3000 | 3000 |
-| product-service | 8080 | 8080 |
+| frontend (pending) | 3000 | 3000 |
+| product-service (Dockerfile pending) | 8080 | 8080 |
 | order-service | 8081 | 8081 |
-| inventory-service | 8082 | 8082 |
+| inventory-service (Dockerfile pending) | 8082 | 8082 |
 | cart-service | 8083 | 8083 |
 | shop-postgres | 5433 | 5432 |
 
-PostgreSQL is mapped to 5433 on the host so it does not clash with a
-PostgreSQL already installed on the machine. Inside Docker it is still 5432,
-and the containers reach it as `shop-postgres:5432`.
+Containers use names on `store-net` to reach each other. Order-service calls `product-service:8080` and `inventory-service:8082`; cart-service calls `order-service:8081`. All backend services connect to `shop-postgres:5432`. The scripts supply these addresses through environment variables.
 
----
+Browser requests use the published localhost ports, not Docker container names.
 
-## How the containers find each other
+## Database and reset
 
-All containers join a user-defined network called `store-net`, so each one is
-reachable by its container name:
+PostgreSQL 16 reads `db/init/schema.sql` and `db/init/seed.sql` through `/docker-entrypoint-initdb.d` when it initializes an empty data volume. The seed defines 12 products with image paths and matching inventory rows, including one zero-stock product. Image files are not included yet.
 
-```
-frontend  ->  cart-service:8083
-cart      ->  order-service:8081
-order     ->  product-service:8080  and  inventory-service:8082
-all four  ->  shop-postgres:5432
-```
+Each service uses `spring.jpa.hibernate.ddl-auto=validate`; SQL scripts define the schema.
 
-Service addresses are never hard-coded. Each service reads them from
-`application.properties`, and `run.ps1` / `run.sh` override them with `-e`
-environment variables at `docker run` time.
-
----
-
-## The database
-
-`db/init` is mounted into the Postgres container at
-`/docker-entrypoint-initdb.d`. PostgreSQL runs every `.sql` file there, in
-name order, the first time the data volume is created:
-
-- `schema.sql` - products, inventory, carts, cart_items, orders
-- `seed.sql` - 12 products with images, an inventory row for each, and one
-  product with 0 stock so the out-of-stock case can be demonstrated
-
-Hibernate does not create any tables. Every service runs with
-`spring.jpa.hibernate.ddl-auto=validate`.
-
-### Resetting the database
-
-Init scripts run **only** when the data volume is created. If you edit
-`seed.sql` and nothing changes, the old volume is still there. The stop
-scripts delete it:
+To remove containers, database data, and the network:
 
 ```powershell
-.\stop.ps1      # removes containers AND the volume
-.\run.ps1       # re-seeds from db/init
+.\stop.ps1
 ```
 
----
-
-## Checking it works
-
 ```bash
-docker ps                                            # six containers up
-
-curl http://localhost:8080/api/products              # catalog
-curl http://localhost:8082/api/inventory             # stock levels
-curl http://localhost:8081/api/orders                # orders (empty at first)
+bash stop.sh
 ```
 
-Full checkout flow:
+Run the startup script again to recreate and seed the database. Both startup and stop scripts delete existing database data.
 
-1. Open <http://localhost:3000>
-2. Add two products to the cart
-3. Check out - order numbers appear and stock goes down
-4. Try to buy more than the available stock - checkout is refused with a
-   clear message and no order is saved
+## Verification
 
-### Useful commands
+Inspect containers and order-service logs:
 
 ```bash
-docker logs -f order-service        # live log for one service
-docker ps -a                        # including stopped containers
+docker ps -a
+docker logs order-service
 docker exec shop-postgres psql -U postgres -d shopdb -c "SELECT * FROM orders;"
 ```
 
----
+Check the order endpoint after it starts:
 
-## The checkout flow
-
-```
-frontend -> cart-service    POST /api/carts/{id}/checkout
-cart     -> order-service   POST /api/orders
-order    -> product-service GET  /api/products/{id}      (confirm + price)
-order    -> inventory       POST /api/inventory/reserve  (all lines or none)
+```bash
+curl http://localhost:8081/api/orders
 ```
 
-Stock is reserved before any order is saved. If any line is short,
-inventory-service returns 409, reserves nothing, and no order is written.
+In Windows PowerShell, use `curl.exe` for these curl commands.
 
-Services call each other with Spring's `RestClient`. No service reads or
-writes another service's tables.
+After adding and starting the missing services:
+
+```bash
+curl http://localhost:8080/api/products
+curl http://localhost:8082/api/inventory
+```
+
+Once the frontend is available, verify the full flow:
+
+1. Add two products to a cart and check out.
+2. Confirm that each cart line creates an order and reduces inventory.
+3. Request more stock than is available. Confirm a clear error, no new orders, and no inventory deduction.
+
+## Checkout
+
+```text
+frontend -> cart-service     POST /api/carts/{id}/checkout
+cart     -> order-service    POST /api/orders
+order    -> product-service  GET /api/products/{id}
+order    -> inventory-service POST /api/inventory/reserve
+```
+
+Order-service fetches current prices, reserves inventory, and saves one confirmed order per cart line. Inventory reserves all requested lines or returns 409 without deductions. Cart-service marks the cart checked out after receiving the orders.
+
+The services communicate through Spring RestClient and access only their own tables. Checkout is not a distributed transaction: a failure to save orders does not undo a completed inventory reservation.

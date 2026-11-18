@@ -23,19 +23,16 @@ public class InventoryService {
         this.inventoryRepository = inventoryRepository;
     }
 
-    //Get all inventory
     public List<Inventory> getAllInventory() {
         return inventoryRepository.findAll();
     }
 
-    //Get inventory by product ID
     public Inventory getInventoryByProductId(Long productId) {
         return inventoryRepository.findByProductId(productId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Inventory not found"));
     }
 
-    //Reserve stock
     @Transactional
     public void reserveStock(List<InventoryReservationRequest> requests) {
 
@@ -46,7 +43,7 @@ public class InventoryService {
 
         Map<Long, Integer> requestedItems = new TreeMap<>();
 
-        //Validate and combine duplicate products
+        // Combine duplicate product IDs before checking available stock.
         for (InventoryReservationRequest request : requests) {
 
             if (request == null ||
@@ -67,7 +64,7 @@ public class InventoryService {
 
         List<Inventory> inventories = new ArrayList<>();
 
-        //Check stock for every product first
+        // Lock rows in product ID order to reduce deadlock risk.
         for (Map.Entry<Long, Integer> item : requestedItems.entrySet()) {
 
             Inventory inventory = inventoryRepository
@@ -85,7 +82,7 @@ public class InventoryService {
             inventories.add(inventory);
         }
 
-        //Reduce stock only after all products pass validation
+        // Apply deductions after every stock check passes.
         for (Inventory inventory : inventories) {
 
             Integer quantity = requestedItems.get(inventory.getProductId());

@@ -6,12 +6,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/**
- * One order line. A checkout with two different products creates two Orders.
- *
- * The table is called "orders" and not "order" because ORDER is a reserved
- * word in SQL (ORDER BY), so a table named order breaks queries.
- */
+/** One persisted order per cart line. The plural table name avoids the SQL keyword ORDER. */
 @Entity
 @Table(name = "orders")
 public class Order {
@@ -24,13 +19,11 @@ public class Order {
 
     private Integer quantity;
 
-    /** price from product-service x quantity, worked out at checkout. */
+    /** Price at checkout multiplied by quantity. */
     private Double totalPrice;
 
-    /** CONFIRMED once stock has been reserved. */
     private String status;
 
-    /** Required by Hibernate so it can build an Order when reading a row. */
     public Order() {
     }
 
